@@ -4,7 +4,7 @@ import { resolve } from 'path'
 export default defineConfig({
   title: 'NekoBot',
   description: 'AI驱动的机器人框架',
-  base: '/nekobotdevs.github.io/',
+  base: '/',
   
   // 多语言配置
   locales: {
