@@ -3,7 +3,7 @@ name: Deploy VitePress site
 on:
   push:
     branches:
-      - main  # 这里可以改成你仓库的默认分支
+      - main
 
 jobs:
   deploy:
@@ -19,12 +19,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
 
       - name: Build
-        run: npm run docs:build
+        run: pnpm docs:build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
