@@ -1,5 +1,18 @@
 # TODO列表
 
+## 项目规则
+
+* Do **not** write any test scripts.
+* Run tests directly in the terminal using sample data. **Do not** run tests in the same terminal.
+* If you are developing the frontend, initialize the project and manage dependencies using `pnpm`.
+* For Python development:
+  
+  1. Create a virtual environment with `uv venv`.
+  2. Activate it using `.\venv\Scripts\activate`.
+  3. Install dependencies with `pip install -r requirements.txt`.
+* Read everything carefully whenever new requirements are provided and in conjunction with this document.
+* Always respond to me in **Chinese**.
+
 ## 项目要求(前提条件)
 
 你需要使用当前的项目架构完成一个机器人框架名为：*NekoBot*，且使用当前结构并使用Next.js+Python+SQLite作为数据库来完成一个机器人框架项目 现在你只需要完成后端API部分的代码随后完成前端部分并使用以下库：
@@ -51,6 +64,7 @@ pydub
 sqlmodel
 deprecated
 sqlalchemy[asyncio]
+pyjson5
 ```
 
 ---
@@ -94,11 +108,17 @@ sqlalchemy[asyncio]
   * 输入插件压缩包直链 URL或者插件的插件仓库的地址
 
 * 插件架构(必须包含)
- data/plugins/nekobot_plugins/
+ data/plugins/nekobot_plugin/
    metadata.yaml（插件元数据 包含名称 版本 描述 作者等信息）
    main.py（插件主程序包含注册插件命令 与版本等）
    requirements.txt(插件需要的依赖)
    README.md（插件自述文件）
+
+* **官方插件**
+  * 官方插件会放在 `packages/` 目录下，用户无法删除官方插件，不可禁用
+    main.py
+    metadata.yaml
+    requirements.txt
 
 #### 插件管理器逻辑
 
@@ -107,7 +127,7 @@ sqlalchemy[asyncio]
 #### 插件注册的前提条件
 
 * 插件主程序必须集成一个基类名为'base'的类，如果没有这个类则无法不识别为插件
-* 插件主程序必须包含以下装饰器(函数)用于管理插件生命周期
+* 插件主程序可以包含以下装饰器(函数)用于管理插件生命周期，但是有些函数是必须的(如注册命令)否则无法识别为插件
 
 * @Neko.base.Register(用于在管理器注册命令)(必须，实现插件注册逻辑)
 * @Neko.base.Unregister(用于在管理器销毁命令)
@@ -164,6 +184,8 @@ repository: 插件的GitHub仓库地址(更新时需要)
 
 ### 4. LLM/TTL 服务商配置
 
+LLM/TTL 服务商配置需存储在sqlite数据库中
+
 * 支持在仪表盘中配置多个 LLM/TTL 服务商
 * 用户可自定义 API 兼容 OpenAI/Anthropic/Google 风格
 * 支持为同一服务商配置多个 APIKey(轮询使用)
@@ -202,6 +224,8 @@ repository: 插件的GitHub仓库地址(更新时需要)
 
 ### 提示词/人设配置
 
+支持直接将Markdown文件上传至服务器(前端仪表盘上传)或者直接在仪表盘中编辑提示词和人设
+
 * 支持用户自定义提示词和角色设定
 * 支持为不同场景配置不同的提示词和角色
 * 支持导入导出(支持上传Markdown文件)提示词和角色配置
@@ -210,12 +234,14 @@ repository: 插件的GitHub仓库地址(更新时需要)
 ### 日志管理
 
 * 支持本地日志文件查看与下载
-* 支持日志级别设置（如 DEBUG、INFO、WARNING、ERROR）
+* 支持日志级别设置（如 DEBUG、INFO、WARNING、ERROR、CRITICAL）
 * 支持日志搜索与过滤
 * 实时日志流[(WebSocket 推送)(支持自动滚动开关)]
 * 日志类型颜色(按照类型显示)
 
 ### mcp支持
+
+存储时使用json格式存储，文件名为mcpserver.json
 
 * 支持mcp接口
 * 支持mcp工具接口
@@ -282,7 +308,7 @@ nekobot-cli -up
 
 需要对接的消息平台如下：
 
-* QQ(使用aiocqhttp对接兼容nonebot2协议的消息平台)
+* QQ(使用aiocqhttp对接兼容Onebot V11协议格式的消息平台)
 * QQ官方Bot(WebSocket/HTTP API对接)
 * Discord
 * Telegram
@@ -295,6 +321,98 @@ nekobot-cli -up
 * Slack
 * kook
 
+## 沙盒机制
+
+NekoBot 需要实现一个多层次的沙盒机制来确保插件和代码执行的安全性，防止恶意代码对系统造成损害。具体需求如下：
+
+### 1. 插件系统沙盒
+
+#### 1.1 插件生命周期管理
+- **插件加载隔离**：通过插件管理器统一管理插件的加载、卸载、重载
+- **模块隔离**：每个插件都在独立的 Python 模块中运行，通过 `sys.modules` 管理模块缓存
+- **命名空间隔离**：插件使用 `data.plugins.` 或 `packages.` 前缀进行模块命名隔离
+
+#### 1.2 权限控制机制
+- **权限过滤器**：实现基于用户角色的权限控制
+- **权限级别**：支持 `主人`、`群主`、`管理员`、`用户` 四种权限级别
+- **动态权限配置**：可以为每个插件的不同命令设置不同权限
+
+#### 1.3 插件状态管理
+- **激活/禁用机制**：插件可以被启用或禁用，禁用的插件不会实例化
+- **会话级插件控制**：支持按会话控制插件的启用状态
+- **保留插件保护**：系统核心插件标记为保留，防止被卸载
+
+### 2. Docker 沙盒实现
+
+#### 2.1 容器化代码执行
+- **Docker 隔离**：使用 Docker 容器执行用户提供的 Python 代码
+- **资源限制**：限制容器内存使用（默认 512MB）和 CPU 使用（默认 1核）
+- **自动清理**：容器执行完成后自动删除
+
+#### 2.2 文件系统隔离
+- **挂载点控制**：只挂载必要的目录到容器中：
+  - `/nekobot_sandbox/shared:ro` - 只读的共享 API 目录
+  - `/nekobot_sandbox/output:rw` - 可写的输出目录
+  - `/nekobot_sandbox:rw` - 可写的工作目录
+
+#### 2.3 安全输出机制
+- **魔法码验证**：使用环境变量防止输出注入攻击
+- **格式化输出**：通过共享 API 模块控制输出格式：
+  ```python
+  [NEKOBOT_TEXT_OUTPUT#magic_code]: content
+  [NEKOBOT_IMAGE_OUTPUT#magic_code]: path
+  [NEKOBOT_FILE_OUTPUT#magic_code]: path
+  ```
+
+#### 2.4 代码执行限制
+- **库限制**：只允许使用预定义的安全库（Pillow、requests、numpy 等）
+- **超时控制**：容器执行超时时间可配置（默认 20 秒）
+- **错误处理**：捕获并隔离代码执行错误，防止影响主系统
+
+### 3. 系统级安全措施
+
+#### 3.1 配置隔离
+- **独立配置**：每个插件有独立的配置文件和配置模式
+- **配置验证**：通过 JSON Schema 验证插件配置的合法性
+
+#### 3.2 事件系统隔离
+- **事件队列**：通过异步事件队列进行插件间通信
+- **事件过滤**：支持多种过滤器（命令、正则、权限）控制事件处理
+
+#### 3.3 热重载安全
+- **文件监控**：监控插件文件变化
+- **原子性重载**：重载时先终止旧插件，再加载新插件
+- **模块清理**：重载时清理相关的模块缓存
+
+### 4. 沙盒机制特点
+
+#### 4.1 多层防护
+- **架构层**：插件系统设计层面的隔离
+- **容器层**：Docker 提供的进程级隔离
+- **应用层**：权限控制和输出过滤
+
+#### 4.2 灵活性
+- **按需启用**：可以根据需要启用或禁用沙盒功能
+- **配置化**：支持通过配置文件调整沙盒参数
+- **扩展性**：可以轻松添加新的沙盒实现
+
+#### 4.3 安全性
+- **最小权限**：插件和容器只拥有必要的权限
+- **输入验证**：对用户输入进行严格验证
+- **输出控制**：对插件输出进行格式化和过滤
+
+### 5. 沙盒配置要求
+
+#### 5.1 Docker 配置
+- **镜像管理**：支持自定义 Docker 镜像和镜像仓库
+- **代理支持**：支持 Docker 镜像拉取代理
+- **路径映射**：支持配置宿主机路径映射
+
+#### 5.2 安全配置
+- **资源限制**：可配置内存、CPU、网络等资源限制
+- **白名单机制**：支持库、命令、文件访问白名单
+- **审计日志**：记录所有沙盒操作和代码执行日志
+
 ---
 
 ## 项目格式化要求
@@ -305,11 +423,22 @@ nekobot-cli -up
 ruff check .
 ```
 
+ruff格式要求
+
+* 忽略：F403, F405, E501, ASYNC230
+* 检查规则：Pyflakes (F)、Pycodestyle (W/E)、异步规范 (ASYNC)、列表推导优化 (C4)、引号规范 (Q)
+* 最大行长：88
+* 目标版本：Python 3.10
+* 排除目录：.venv, venv, env, .git, __pycache__, build, dist, .eggs, *.egg-info, .mypy_cache, .pytest_cache, .ruff_cache
+* 项目命名不要过长
+
 ## 部署与安全
 
 * 可使用 Docker Compose 一键部署，支持多操作系统
 * 初次登录需使用默认账户密码(均为nekobot)，并强制修改密码/[(用户也可一并修改)(用户名非必须)]
-* 用户密码加盐哈希存储（bcrypt）
+* 用户密码加盐哈希存储(bcrypt),登录时校验数据库中加盐后的密码
 * 使用 JWT 进行用户登录认证
 * 可使用配置文件来控制cors跨域 来控制哪些域名可以访问webui(dashboard)接口
+* 最大限度减少对外暴露的端口，只暴露webui端口和Fastapi端口
+* 防止SQL、XSS注入攻击，防止文件上传漏洞和文件遍历攻击
 * 直接使用*python main.py*启动 不需要任何脚本
