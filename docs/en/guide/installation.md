@@ -113,7 +113,7 @@ Pre-compiled packages are under development, stay tuned!
 
 Create `.env` file to configure environment variables:
 
-```env
+```bash
 # Basic configuration
 NEKOBOT_HOST=0.0.0.0
 NEKOBOT_PORT=8080
@@ -373,4 +373,3 @@ If you encounter problems, please:
 2. Search [Known Issues](https://github.com/NekoBotDevs/NekoBot/issues)
 3. Submit [New Issue](https://github.com/NekoBotDevs/NekoBot/issues/new)
 4. Join [Community Discussions](https://github.com/NekoBotDevs/NekoBot/discussions)
-

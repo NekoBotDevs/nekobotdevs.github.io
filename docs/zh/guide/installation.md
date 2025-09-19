@@ -113,7 +113,7 @@ docker-compose up -d
 
 创建`.env`文件配置环境变量：
 
-```env
+```bash
 # 基础配置
 NEKOBOT_HOST=0.0.0.0
 NEKOBOT_PORT=8080
